@@ -29,7 +29,7 @@
 #include "secp256k1.h"
 
 void point_copy(const curve_point *cp1, curve_point *cp2);
-void point_add(const curve_point *cp1, curve_point *cp2);
+void ec_point_add(const curve_point *cp1, curve_point *cp2);
 void point_double(curve_point *cp);
 void point_multiply(const bignum256 *k, const curve_point *p, curve_point *res);
 void point_set_infinity(curve_point *p);

@@ -159,7 +159,7 @@ int hdnode_public_ckd(HDNode *inout, uint32_t i)
 	}
 
 	scalar_multiply(&c, &b); // b = c * G
-	point_add(&a, &b);       // b = a + b
+	ec_point_add(&a, &b);       // b = a + b
 
 #if USE_PUBKEY_VALIDATE
 	if (!ecdsa_validate_pubkey(&b)) {

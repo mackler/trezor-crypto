@@ -41,7 +41,7 @@ void point_copy(const curve_point *cp1, curve_point *cp2)
 }
 
 // cp2 = cp1 + cp2
-void point_add(const curve_point *cp1, curve_point *cp2)
+void ec_point_add(const curve_point *cp1, curve_point *cp2)
 {
 	int i;
 	uint32_t temp;
@@ -147,7 +147,7 @@ void point_multiply(const bignum256 *k, const curve_point *p, curve_point *res)
 					memcpy(res, &curr, sizeof(curve_point));
 					is_zero = 0;
 				} else {
-					point_add(&curr, res);
+					ec_point_add(&curr, res);
 				}
 			}
 			point_double(&curr);
@@ -218,13 +218,13 @@ void scalar_multiply(const bignum256 *k, curve_point *res)
 			} else {
 #if USE_PRECOMPUTED_CP
 				if (i < 255 && (k->val[(i + 1) / 30] & (1u << ((i + 1) % 30)))) {
-					point_add(secp256k1_cp2 + i, res);
+					ec_point_add(secp256k1_cp2 + i, res);
 					i++;
 				} else {
-					point_add(secp256k1_cp + i, res);
+					ec_point_add(secp256k1_cp + i, res);
 				}
 #else
-				point_add(&curr, res);
+				ec_point_add(&curr, res);
 #endif
 			}
 		}
@@ -582,7 +582,7 @@ int ecdsa_verify_digest(const uint8_t *pub_key, const uint8_t *sig, const uint8_
 		for (j = 0; j < 30; j++) {
 			if (i == 8 && (s.val[i] >> j) == 0) break;
 			if (s.val[i] & (1u << j)) {
-				point_add(&pub, &res);
+				ec_point_add(&pub, &res);
 			}
 			point_double(&pub);
 		}
