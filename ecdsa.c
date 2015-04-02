@@ -451,7 +451,7 @@ void point_multiply(const bignum256 *k, const curve_point *p, curve_point *res)
 	pmult[0] = *p;
 	for (i = 1; i < 8; i++) {
 		pmult[i] = pmult[7];
-		point_add(&pmult[i-1], &pmult[i]);
+		ec_point_add(&pmult[i-1], &pmult[i]);
 	}
 
 	// now compute  res = sum_{i=0..63} a[i] * 16^i * p step by step,
@@ -916,7 +916,7 @@ int ecdsa_verify_digest(const uint8_t *pub_key, const uint8_t *sig, const uint8_
 
 	// both pub and res can be infinity, can have y = 0 OR can be equal -> false negative
 	point_multiply(&s, &pub, &pub);
-	point_add(&pub, &res);
+	ec_point_add(&pub, &res);
 	bn_mod(&(res.x), &order256k1);
 
 	// signature does not match
