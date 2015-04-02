@@ -34,6 +34,7 @@
 #include "bip39.h"
 #include "ecdsa.h"
 #include "pbkdf2.h"
+#include "rand.h"
 #include "sha2.h"
 #include "options.h"
 
@@ -427,7 +428,77 @@ START_TEST(test_bip32_compare)
 }
 END_TEST
 
-int generate_k_rfc6979(bignum256 *secret, const uint8_t *priv_key, const uint8_t *hash);
+START_TEST(test_bip32_cache_1)
+{
+	HDNode node1, node2;
+	int i, r;
+
+	// test 1 .. 8
+	hdnode_from_seed(fromhex("301133282ad079cbeb59bc446ad39d333928f74c46997d3609cd3e2801ca69d62788f9f174429946ff4e9be89f67c22fae28cb296a9b37734f75e73d1477af19"), 64, &node1);
+	hdnode_from_seed(fromhex("301133282ad079cbeb59bc446ad39d333928f74c46997d3609cd3e2801ca69d62788f9f174429946ff4e9be89f67c22fae28cb296a9b37734f75e73d1477af19"), 64, &node2);
+
+	uint32_t ii[] = {0x80000001, 0x80000002, 0x80000003, 0x80000004, 0x80000005, 0x80000006, 0x80000007, 0x80000008};
+
+	for (i = 0; i < 8; i++) {
+		r = hdnode_private_ckd(&node1, ii[i]); ck_assert_int_eq(r, 1);
+	}
+	r = hdnode_private_ckd_cached(&node2, ii, 8); ck_assert_int_eq(r, 1);
+	ck_assert_mem_eq(&node1, &node2, sizeof(HDNode));
+
+	hdnode_from_seed(fromhex("301133282ad079cbeb59bc446ad39d333928f74c46997d3609cd3e2801ca69d62788f9f174429946ff4e9be89f67c22fae28cb296a9b37734f75e73d1477af19"), 64, &node1);
+	hdnode_from_seed(fromhex("301133282ad079cbeb59bc446ad39d333928f74c46997d3609cd3e2801ca69d62788f9f174429946ff4e9be89f67c22fae28cb296a9b37734f75e73d1477af19"), 64, &node2);
+
+	// test 1 .. 7, 20
+	ii[7] = 20;
+	for (i = 0; i < 8; i++) {
+		r = hdnode_private_ckd(&node1, ii[i]); ck_assert_int_eq(r, 1);
+	}
+	r = hdnode_private_ckd_cached(&node2, ii, 8); ck_assert_int_eq(r, 1);
+	ck_assert_mem_eq(&node1, &node2, sizeof(HDNode));
+
+	// test different root node
+	hdnode_from_seed(fromhex("000000002ad079cbeb59bc446ad39d333928f74c46997d3609cd3e2801ca69d62788f9f174429946ff4e9be89f67c22fae28cb296a9b37734f75e73d1477af19"), 64, &node1);
+	hdnode_from_seed(fromhex("000000002ad079cbeb59bc446ad39d333928f74c46997d3609cd3e2801ca69d62788f9f174429946ff4e9be89f67c22fae28cb296a9b37734f75e73d1477af19"), 64, &node2);
+
+	for (i = 0; i < 8; i++) {
+		r = hdnode_private_ckd(&node1, ii[i]); ck_assert_int_eq(r, 1);
+	}
+	r = hdnode_private_ckd_cached(&node2, ii, 8); ck_assert_int_eq(r, 1);
+	ck_assert_mem_eq(&node1, &node2, sizeof(HDNode));
+}
+END_TEST
+
+START_TEST(test_bip32_cache_2)
+{
+	HDNode nodea[9], nodeb[9];
+	int i, j, r;
+
+	for (j = 0; j < 9; j++) {
+		hdnode_from_seed(fromhex("301133282ad079cbeb59bc446ad39d333928f74c46997d3609cd3e2801ca69d62788f9f174429946ff4e9be89f67c22fae28cb296a9b37734f75e73d1477af19"), 64, &(nodea[j]));
+		hdnode_from_seed(fromhex("301133282ad079cbeb59bc446ad39d333928f74c46997d3609cd3e2801ca69d62788f9f174429946ff4e9be89f67c22fae28cb296a9b37734f75e73d1477af19"), 64, &(nodeb[j]));
+	}
+
+	uint32_t ii[] = {0x80000001, 0x80000002, 0x80000003, 0x80000004, 0x80000005, 0x80000006, 0x80000007, 0x80000008};
+	for (j = 0; j < 9; j++) {
+		// non cached
+		for (i = 1; i <= j; i++) {
+			r = hdnode_private_ckd(&(nodea[j]), ii[i - 1]); ck_assert_int_eq(r, 1);
+		}
+		// cached
+		r = hdnode_private_ckd_cached(&(nodeb[j]), ii, j); ck_assert_int_eq(r, 1);
+	}
+
+	ck_assert_mem_eq(&(nodea[0]), &(nodeb[0]), sizeof(HDNode));
+	ck_assert_mem_eq(&(nodea[1]), &(nodeb[1]), sizeof(HDNode));
+	ck_assert_mem_eq(&(nodea[2]), &(nodeb[2]), sizeof(HDNode));
+	ck_assert_mem_eq(&(nodea[3]), &(nodeb[3]), sizeof(HDNode));
+	ck_assert_mem_eq(&(nodea[4]), &(nodeb[4]), sizeof(HDNode));
+	ck_assert_mem_eq(&(nodea[5]), &(nodeb[5]), sizeof(HDNode));
+	ck_assert_mem_eq(&(nodea[6]), &(nodeb[6]), sizeof(HDNode));
+	ck_assert_mem_eq(&(nodea[7]), &(nodeb[7]), sizeof(HDNode));
+	ck_assert_mem_eq(&(nodea[8]), &(nodeb[8]), sizeof(HDNode));
+}
+END_TEST
 
 #define test_deterministic(KEY, MSG, K) do { \
 	sha256_Raw((uint8_t *)MSG, strlen(MSG), buf); \
@@ -990,7 +1061,6 @@ START_TEST(test_pubkey_validity)
 	res = ecdsa_read_pubkey(pub_key, &pub);
 	ck_assert_int_eq(res, 1);
 
-#if USE_PUBKEY_VALIDATE
 	memcpy(pub_key, fromhex("04f80490839af36d13701ec3f9eebdac901b51c362119d74553a3c537faff31b17e2a59ebddbdac9e87b816307a7ed5b826b8f40b92719086238e1bebf00000000"), 65);
 	res = ecdsa_read_pubkey(pub_key, &pub);
 	ck_assert_int_eq(res, 0);
@@ -998,7 +1068,6 @@ START_TEST(test_pubkey_validity)
 	memcpy(pub_key, fromhex("04f80490839af36d13701ec3f9eebdac901b51c362119d74553a3c537faff31b17e2a59ebddbdac9e87b816307a7ed5b8211111111111111111111111111111111"), 65);
 	res = ecdsa_read_pubkey(pub_key, &pub);
 	ck_assert_int_eq(res, 0);
-#endif
 
 	memcpy(pub_key, fromhex("00"), 1);
 	res = ecdsa_read_pubkey(pub_key, &pub);
@@ -1149,6 +1218,8 @@ Suite *test_suite(void)
 	tcase_add_test(tc, test_bip32_vector_1);
 	tcase_add_test(tc, test_bip32_vector_2);
 	tcase_add_test(tc, test_bip32_compare);
+	tcase_add_test(tc, test_bip32_cache_1);
+	tcase_add_test(tc, test_bip32_cache_2);
 	suite_add_tcase(s, tc);
 
 	tc = tcase_create("rfc6979");
@@ -1201,6 +1272,7 @@ Suite *test_suite(void)
 int main(void)
 {
 	int number_failed;
+	init_rand(); // needed for scalar_multiply()
 	Suite *s = test_suite();
 	SRunner *sr = srunner_create(s);
 	srunner_run_all(sr, CK_VERBOSE);
